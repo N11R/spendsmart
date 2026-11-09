@@ -28,7 +28,7 @@ spendsmart/
 
 ## Requirements
 
-- Node.js 18 or later
+- Node.js 20.19 or later (required by Vite)
 - npm
 
 ## Setup and running

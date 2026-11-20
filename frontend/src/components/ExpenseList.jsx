@@ -1,15 +1,18 @@
-function ExpenseList({ expenses, error }) {
-  // Newest expense first
-  const newestFirst = [...expenses].reverse()
+import { money } from '../constants.js'
+
+function ExpenseList({ expenses, error, limit, title = 'Recent Expenses' }) {
+  // Newest first, by date
+  const sorted = [...expenses].sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id)
+  const shown = limit ? sorted.slice(0, limit) : sorted
 
   return (
     <section className="card">
-      <h2>Recent Expenses</h2>
+      <h2>{title}</h2>
 
       {error && <p className="load-error">{error}</p>}
       {!error && expenses.length === 0 && <p className="muted">No expenses yet.</p>}
 
-      {expenses.length > 0 && (
+      {shown.length > 0 && (
         <table>
           <thead>
             <tr>
@@ -20,12 +23,12 @@ function ExpenseList({ expenses, error }) {
             </tr>
           </thead>
           <tbody>
-            {newestFirst.map((expense) => (
+            {shown.map((expense) => (
               <tr key={expense.id}>
                 <td>{expense.date}</td>
                 <td>{expense.merchant}</td>
                 <td>{expense.category}</td>
-                <td className="amount">${expense.amount.toFixed(2)}</td>
+                <td className="amount">{money(expense.amount)}</td>
               </tr>
             ))}
           </tbody>

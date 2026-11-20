@@ -1,8 +1,7 @@
 import { useState } from 'react'
+import { Link } from 'react-router'
 import { addExpense } from '../api.js'
-
-// Must match CATEGORIES in backend/server.js
-const CATEGORIES = ['Food', 'Groceries', 'Delivery', 'Transit', 'Rent', 'Other']
+import { CATEGORIES } from '../constants.js'
 
 const EMPTY_FORM = { merchant: '', amount: '', category: '', date: '' }
 
@@ -31,7 +30,7 @@ function ExpenseForm({ onSaved }) {
         setErrors(data.errors || [data.error])
       }
     } catch {
-      setErrors(['Could not reach the server. Make sure the backend is running on port 3001.'])
+      setErrors(['Could not reach the server. Make sure the API Gateway is running (npm start).'])
     } finally {
       setSaving(false)
     }
@@ -41,10 +40,10 @@ function ExpenseForm({ onSaved }) {
     <section className="card">
       <h2>Add Expense</h2>
 
-      <div className="receipt-placeholder">
-        <strong>Upload receipt</strong>
-        <span>AI receipt scanning is coming in Phase III</span>
-      </div>
+      <Link to="/expenses/receipt" className="receipt-placeholder">
+        <strong>Scan a receipt</strong>
+        <span>The AI fills in the fields for you to check</span>
+      </Link>
 
       {/* noValidate: the Express backend checks the fields and sends back the errors */}
       <form onSubmit={handleSubmit} noValidate>

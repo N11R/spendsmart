@@ -1,0 +1,15 @@
+{
+  "name": "spendsmart-ai-service",
+  "version": "1.0.0",
+  "description": "AI Agent Service: calls Groq to read receipts and quick expense text",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test-groq": "node test-groq.js"
+  },
+  "dependencies": {
+    "dotenv": "^18.0.10",
+    "express": "^5.3.0",
+    "multer": "^2.5.0"
+  }
+}

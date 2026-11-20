@@ -2,161 +2,132 @@
 
 **The Penny Pinchers (Team 11)** · TCSS 460: Client/Server Programming for Internet Applications
 
-SpendSmart is an AI-powered budget tracker for college students. Users log expenses, set monthly budgets, and get warned before they overspend. Later phases add AI receipt scanning and spending insights.
-
-This is the **Phase II prototype**. It demonstrates one full client–server interaction: a user adds an expense in React, the Express API validates and saves it, and the API returns the updated budget status for that category.
+SpendSmart is an AI-powered budget tracker for college students. Users log expenses or scan a receipt, set category budgets, and get warned before they overspend.
 
 ## Team
 
 | Member | Responsibility |
 |---|---|
 | Mariam Hussein | Frontend and design (React) |
-| Nasra Hussein | Backend, data, and AI (Node.js/Express) |
+| Nasra Hussein | Backend services, data, and AI (Node.js/Express, MongoDB, Groq) |
 
-## Project structure
+**Roles (Sprint 1):** Team Leader: Nasra Hussein · Scrum Master: Mariam Hussein
+
+**Communication:** We use Discord for daily updates and questions, and GitHub Issues for the sprint backlog.
+
+## Architecture
+
+The React frontend talks only to the **API Gateway**. The gateway forwards each request to the service that owns it. Each data service has its own MongoDB database.
+
+| Service | Port | Folder | Responsibility |
+|---|---|---|---|
+| Frontend (React + Vite) | 5173 | `frontend/` | Pages, forms, receipt review. Calls only `/api` |
+| API Gateway | 4000 | `gateway/` | Single entry point. Routes `/api/*` to the services, health check |
+| Expense Service | 4001 | `services/expense-service/` | Expenses CRUD, database `spendsmart_expenses`, seed script |
+| Budget Service | 4002 | `services/budget-service/` | Category budgets and the 80% warning, database `spendsmart_budgets`, seed script |
+| AI Agent Service | 4003 | `services/ai-service/` | Groq calls: receipt reading and quick expense text |
 
 ```
-spendsmart/
-├── frontend/        React app (Vite)
-├── backend/         Express API
-│   ├── server.js
-│   └── .env.example
-├── docs/            Phase II report
-├── README.md
-└── .gitignore
+Browser → React (5173) → API Gateway (4000) ─┬→ Expense Service (4001) → MongoDB: spendsmart_expenses
+                                             ├→ Budget Service (4002)  → MongoDB: spendsmart_budgets
+                                             └→ AI Agent Service (4003) → Groq API
 ```
+
+## External API: Groq
+
+The AI Agent Service uses the **Groq API** (model `qwen/qwen3.8-27b`, which reads both text and images).
+
+- **Sent to Groq:** a receipt photo (base64) or short expense text, plus instructions to answer in JSON with our categories.
+- **Received:** `{ merchant, amount, date, category }`, with `null` for anything it couldn't read. The user checks the fields before saving.
+- **Key handling:** `GROQ_API_KEY` lives only in `.env` on the backend. Only the AI Agent Service calls Groq, so the key never reaches the browser or GitHub.
+
+## AI agent tools (planned for Sprint 2)
+
+These are the tools the AI agent will be able to call on its own, so it can do more than answer text prompts.
+
+| Tool | What it does | Calls |
+|---|---|---|
+| `getBudgetStatus(category)` | How much of a category budget is used | Budget Service `GET /budgets/:category` |
+| `getSpendingByCategory()` | Total spent in every category | Expense Service `GET /expenses/totals` |
+| `getRecentExpenses(limit)` | The latest expenses, to spot patterns | Expense Service `GET /expenses` |
+| `compareToLastMonth(category)` | Whether spending in a category went up | Expense Service (new, Sprint 2) |
+| `createInsight(type, message)` | Saves a warning or tip for the dashboard | Insights (new, Sprint 2) |
+
+**Example:** A user saves a $24 DoorDash expense. The agent calls `getBudgetStatus("Delivery")` and sees 88% used, then `compareToLastMonth("Delivery")` and sees it doubled, then `createInsight("warning", "...")` with a tip to cook at home this week.
 
 ## Requirements
 
-- Node.js 20.19 or later (required by Vite)
-- npm
+- Node.js 20.19 or later
+- A MongoDB Atlas cluster (free tier is fine)
+- A Groq API key from https://console.groq.com/keys
 
-## Setup and running
+## Setup
 
-Run the backend and the frontend in two separate terminals.
-
-### 1. Backend
-
-```bash
-cd backend
-npm install
-cp .env.example .env
-npm start
-```
-
-The API runs at http://localhost:3001.
-
-### 2. Frontend
+From the project root:
 
 ```bash
-cd frontend
-npm install
-npm run dev
+npm run install-all       # installs every package
+cp .env.example .env      # then add your MongoDB URI and Groq key to .env
+npm run seed              # fills both databases with sample data
+npm run test-groq         # optional: checks that the Groq key works
+npm start                 # starts the gateway, all services, and the frontend
 ```
 
-Open http://localhost:5173 in your browser.
+Open http://localhost:5173.
 
-## Environment variables
-
-Copy `backend/.env.example` to `backend/.env`. The `.env` file is ignored by Git and must never be committed.
+### Environment variables (`.env` in the project root)
 
 | Variable | Required | Description |
 |---|---|---|
-| `PORT` | No | Port for the API. Defaults to `3001`. |
-| `API_KEY` | Not yet | Key for the AI receipt-scanning service, planned for Phase III. Stays on the backend only. |
+| `MONGODB_URI` | Yes | MongoDB connection string. Each service uses its own database on it |
+| `GROQ_API_KEY` | Yes | Groq API key. Used only by the AI Agent Service, never sent to the frontend |
+| `GROQ_MODEL` | No | Groq model that accepts images. Defaults to `qwen/qwen3.8-27b` |
 
-## Testing the prototype
+`.env` is ignored by Git and must never be committed.
 
-### In the browser
-
-1. Start the backend and the frontend.
-2. Add an expense, for example **DoorDash**, **24**, **Delivery**, and any date.
-3. The app shows the saved expense and the Delivery budget status: **$132 of $150 used (88%)**, with a warning because more than 80% of the budget is used.
-4. Submit the form with empty fields. The server rejects it and the app shows the error messages.
-
-### From the terminal
-
-With the backend running:
-
-```bash
-# Server check
-curl http://localhost:3001/api/health
-
-# List expenses
-curl http://localhost:3001/api/expenses
-
-# Add a valid expense
-curl -X POST http://localhost:3001/api/expenses \
-  -H "Content-Type: application/json" \
-  -d '{"merchant":"DoorDash","amount":24,"category":"Delivery","date":"2026-11-05"}'
-
-# Add an invalid expense (returns 400 with error messages)
-curl -X POST http://localhost:3001/api/expenses \
-  -H "Content-Type: application/json" \
-  -d '{"merchant":"","amount":-5,"category":"Shoes"}'
-```
-
-## Implemented API endpoints
+## API (through the gateway at http://localhost:4000)
 
 | Method | Endpoint | Description |
 |---|---|---|
-| GET | `/api/health` | Confirms the server is running |
-| GET | `/api/expenses` | Returns all expenses |
-| POST | `/api/expenses` | Validates and adds an expense, then returns the category's budget status |
+| GET | `/api/health` | Gateway status and whether each service is up |
+| GET | `/api/expenses` | All expenses, newest first |
+| GET | `/api/expenses/:id` | One expense |
+| POST | `/api/expenses` | Add an expense. Returns `{ expense, budgetStatus }` |
+| PUT | `/api/expenses/:id` | Edit an expense |
+| DELETE | `/api/expenses/:id` | Delete an expense |
+| GET | `/api/expenses/totals` | Total spent per category |
+| GET | `/api/budgets` | Every budget with spent, remaining, percent used, and warning |
+| GET | `/api/budgets/:category` | One budget's status |
+| PUT | `/api/budgets/:category` | Set or change a budget, body `{ "budget": 200 }` |
+| GET | `/api/ai/test` | Simple Groq call to check the AI connection |
+| POST | `/api/ai/receipt` | Read a receipt photo (multipart field `receipt`). Returns `{ merchant, amount, date, category }`, with `null` for anything it couldn't read |
+| POST | `/api/ai/parse-text` | Read quick text like `{ "text": "chipotle 13.50" }` into the same fields |
 
-### `POST /api/expenses`
+Invalid input returns `400` with an `errors` list, unknown routes return `404`, and a service that isn't running returns `503` from the gateway.
 
-Request body:
+## Testing from the terminal
 
-```json
-{
-  "merchant": "DoorDash",
-  "amount": 24,
-  "category": "Delivery",
-  "date": "2026-11-05"
-}
+With `npm start` running:
+
+```bash
+curl http://localhost:4000/api/health
+curl http://localhost:4000/api/budgets
+curl http://localhost:4000/api/ai/test
+
+curl -X POST http://localhost:4000/api/expenses \
+  -H "Content-Type: application/json" \
+  -d '{"merchant":"DoorDash","amount":24,"category":"Delivery","date":"2026-11-19"}'
+
+curl -X POST http://localhost:4000/api/ai/parse-text \
+  -H "Content-Type: application/json" \
+  -d '{"text":"chipotle 13.50"}'
+
+curl -X POST http://localhost:4000/api/ai/receipt -F "receipt=@receipt.jpg"
 ```
 
-`category` must be one of: Food, Groceries, Delivery, Transit, Rent, Other.
+## Troubleshooting
 
-Success (`201 Created`):
-
-```json
-{
-  "expense": { "id": 3, "merchant": "DoorDash", "amount": 24, "category": "Delivery", "date": "2026-11-05" },
-  "budgetStatus": {
-    "category": "Delivery",
-    "spent": 132,
-    "budget": 150,
-    "remaining": 18,
-    "percentUsed": 88,
-    "warning": "You have used 88% of your Delivery budget."
-  }
-}
-```
-
-Validation error (`400 Bad Request`):
-
-```json
-{
-  "errors": [
-    "Merchant is required.",
-    "Amount must be a positive number.",
-    "Category must be one of: Food, Groceries, Delivery, Transit, Rent, Other.",
-    "Date must be valid (YYYY-MM-DD)."
-  ]
-}
-```
-
-Invalid JSON also returns `400`, and unknown routes return `404`.
-
-## Data
-
-The prototype uses sample data stored in memory, so new expenses are cleared when the server restarts. MongoDB is planned for Phase III.
-
-## Planned for Phase III
-
-- MongoDB storage for users, expenses, budgets, and AI insights
-- AI receipt scanning that fills in the store, date, total, and category
-- Budget management, a spending dashboard, and AI tips
-- Full create, read, update, and delete support for expenses and budgets
+- **A page says a service is "not connected":** Check the terminal running `npm start` for an error from that service. Most often `.env` is missing or `MONGODB_URI` is wrong.
+- **"Address already in use":** An old server is still running. Close old terminal tabs, then run `npm start` again.
+- **MongoDB connection fails:** In Atlas, check the username and password in the URI and add your IP under Network Access.
+- **Groq errors:** Run `npm run test-groq`. A 401 means the key is wrong, and a 429 means the free-tier limit was hit.
